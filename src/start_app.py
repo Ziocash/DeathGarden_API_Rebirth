@@ -11,6 +11,7 @@ from threading import Thread
 import os
 import yaml
 import graypy
+import requests
 
 
 # ------------------------------------------------------- #
@@ -70,7 +71,8 @@ def root():
 def favicon():
     get_remote_ip()
     try:
-        return send_from_directory(os.path.join(app.root_path, 'image'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+        return send_from_directory(os.path.join(app.root_path, 'image'), 'favicon.ico',
+                                   mimetype='image/vnd.microsoft.icon')
     except TimeoutError:
         print("Timeout error")
         return jsonify({"status": "error"})
@@ -155,15 +157,141 @@ def analytics_batch_post():
 def steam_login():
     get_remote_ip()
     # Here the Client sends a signed session ticket as a hex string to the Server.
-    # In return, it wants a cookie named bhvrSession.
     # The Session Ticket allways starts with: 14000000
     try:
         steam_session_token = request.args.get('token')
         graylog_logger("Login by Session Ticket: " + steam_session_token, "info")
-        response = make_response()
-        # This is a TEST cookie. It does NOT work!
-        response.set_cookie("bhvrSession", '0ShiciK0Gthwlc_wrvDAE6A.x0Ye670Dwfe3X657Z2Y2tfkIEoM0a13Mqzm-FErDacC2pKpUJPeyAjEApxgJGFIiS4__blAn4zsk0FOHL-PtUOxHSTWCEc_FKMb2RL41KJBKAXdnGcvCw-4PRLuSfxMBrN9FErAwwbRV9HIKSH39vpm-mpAwmVVCNiQK3XD2T1Ud2N0fiJPHHqvHNiXfOoclQZL3qcnu-fMa6NS4qxEpkS1RwtjSJ1FI9eWFZtlZodvpTiTHnPnadcz22G8lhAi9a.1603079556863.86400000.4U3 4PGSyJ8YEVvATGkmJhiCeCIPuHaD7MVXzPaGYYZ8')
-        return response
+        headers = {
+            'X-Kraken-Client-Platform': 'steam',
+            'X-Kraken-Client-Provider': 'steam',
+            'X-Kraken-Client-Resolution': '3440x1440',
+            'X-Kraken-Client-Timezone-Offset': '-120',
+            'X-Kraken-Client-Os': '10.0.22621.1.256.64bit',
+            'X-Kraken-Client-Version': '3.6.1',
+            'User-Agent': 'TheExit/++UE4+Release-4.21-CL-0 Windows/10.0.19045.1.256.64bit',
+        }
+
+        params = {
+            'token': steam_session_token,
+        }
+        response = requests.get(
+            'https://api.steampowered.com/ISteamUserAuth/AuthenticateUserTicket/v1/?key={}&ticket={}&appid=555440'.format(
+                steam_api_key, steam_session_token), params=params,
+            headers=headers)
+        print("DEBUG: " + str(response.json()))
+        steamid = response.json()["response"]["params"]["result"]["steamid"]
+        owner_id = response.json()["response"]["params"]["result"]["ownersteamid"]  # This is providerId
+        # Read: Doc -> AUTH
+        # You can copy and paste the JSON from the Auth Doc here. If you don't have a steam api key.
+        # The Client does not validate this and just uses it.
+        # Game id = 555440
+        return jsonify({"preferredLanguage": "en", "friendsFirstSync": {"steam": True},
+                        "fixedMyFriendsUserPlatformId": {"steam": True}, "id": "xx000x00-x000-00x0-x0xx-x0000000000x",
+                        "provider": {"providerId": {steamid}, "providerName": "steam",
+                                     "userId": "xx000x00-x000-00x0-x0xx-x0000000000x"},
+                        "providers": [{"providerName": "steam", "providerId": {steamid}}], "friends": [],
+                        "triggerResults": {"success": [], "error": []},
+                        "tokenId": "xx000x00-x000-00x0-x0xx-x0000000000x",
+                        "generated": 1686004631, "expire": 1686091031, "userId": "xx000x00-x000-00x0-x0xx-x0000000000x",
+                        "token": "0x0000x0-00x0-0xxx-00x0-x00x0x000x0x"})
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+@app.route("/api/v1/utils/contentVersion/latest/2.11", methods=["GET"])
+def content_version():
+    get_remote_ip()
+    try:
+        print("Responded to content version api call GET")
+        return jsonify({"latestSupportedVersion": "te-18f25613-36778-ue4-374f864b"})  # Don't know if this is correct. Just testing.
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+@app.route("/api/v1/modifierCenter/modifiers/me", methods=["GET"])
+def modifiers():
+    get_remote_ip()
+    try:
+        print("Responded to modifiers api call GET")
+        return jsonify({"status": "success", "modifiers": []}) # Don't know. Added as Placeholder.
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+@app.route("/api/v1/consent/eula2", methods=["GET"])
+def consent_eula():
+    get_remote_ip()
+    try:
+        print("Responded to consent eula api call GET")
+        return jsonify({"status": "success", "consent": "true"}) # Don't know. Added as Placeholder.
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+# Logging
+@app.route("/api/v1/extensions/quitters/getQuitterState", methods=["POST"])
+def get_quitter_state():
+    get_remote_ip()
+    try:
+        print("Responded to get quitter state api call POST")
+        graylog_logger("Get quitter state: " + str(request.get_json()), "info")
+        return jsonify({"status": "success"})
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+# Logging
+@app.route("/api/v1/extensions/progression/initOrGetGroups", methods=["POST"])
+def extension_progression_init_or_get_groups():
+    get_remote_ip()
+    try:
+        print("Responded to extension progression init or get groups api call POST")
+        graylog_logger("Extension progression init or get groups: " + str(request.get_json()), "info")
+        return jsonify({"status": "success"})
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+# Logging
+@app.route("/api/v1/me/richPresence", methods=["POST"])
+def me_rich_presence():
+    get_remote_ip()
+    try:
+        print("Responded to me rich presence api call POST")
+        graylog_logger("Me_richPresence: " + str(request.get_json()), "info")
+        return jsonify({"status": "success"})
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+@app.route("/moderation/check/username", methods=["POST"])
+def moderation_check_username():
+    get_remote_ip()
+    try:
+        print("Responded to moderation check username api call POST")
+        graylog_logger("Moderation check username: " + str(request.get_json()), "info")
+        return jsonify({"status": "success",
+                        "isAllowed": "true"})  # CLIENT: {"userId": "ID-ID-ID-ID-SEE-AUTH",	"username": "Name-Name-Name"}
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+
+
+# Logging for Server Events
+@app.route("/metrics/server/event", methods=["POST"])
+def metrics_server_event():
+    get_remote_ip()
+    try:
+        print("Responded to metrics server event api call POST")
+        graylog_logger("Metrics server event: " + str(request.get_json()), "info")
+        return jsonify({"status": "success"})
     except TimeoutError:
         print("Timeout error")
         return jsonify({"status": "error"})
@@ -197,7 +325,7 @@ def keep_alive():
 config = load_config()
 use_graylog = config['graylog']['use']
 graylog_server = config['graylog']['host']
-
+steam_api_key = config['steam']['api_key']
 
 # ------------------------------------------------------- #
 # main
