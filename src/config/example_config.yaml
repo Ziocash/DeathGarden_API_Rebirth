@@ -1,9 +1,9 @@
-elasticsearch:
-  host: http://IP:PORT
-  use: false
-
 graylog:
     host: host
     use: false
 steam:
   api_key: XXXXXXXXXXXX
+mongodb:
+  host: mongodb://IP:27017/
+  db: db_name
+  collection: collection_name
