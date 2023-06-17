@@ -164,8 +164,8 @@ def ban_status():
     get_remote_ip()
     try:
         print("Responded to ban status api call GET")
-        return jsonify({"BanPeriod": 33464688741, "BanReason": "TEST", "BanStart": 1592247140, "BanEnd": 33464688740,
-                        "Confirmed": True, "Pending": False})
+        return jsonify({"IsBanned": False, "BanInfo": {"BanPeriod": 10, "BanReason": "None", "BanStart": 1592247140, "BanEnd": 33464688740,
+                        "Confirmed": True, "Pending": False}})
     except TimeoutError:
         print("Timeout error")
         return jsonify({"status": "error"})
@@ -213,3 +213,21 @@ def messages_count():
         return jsonify({"status": "error"})
     except Exception as e:
         logger.graylog_logger(level="error", handler="messages_count", message=str(e))
+
+
+@app.route("/moderation/check/chat", methods=["POST"])
+def moderation_check_chat():
+    get_remote_ip()
+    try:
+        data = request.get_json()
+        userid = data["userId"]
+        language = data["language"]
+        message = data["message"]
+        # Why should we care? Can we get in trouble if we don't?
+        return jsonify({"status": "success", "result": "OK"})  # Testing stuff
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+    except Exception as e:
+        logger.graylog_logger(level="error", handler="moderation_check_chat", message=str(e))
+

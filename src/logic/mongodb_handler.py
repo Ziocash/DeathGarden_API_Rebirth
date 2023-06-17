@@ -32,7 +32,13 @@ class Mongo:
                 new_document = {
                     'steamid': steamid,
                     'userId': userId,
-                    'token': token
+                    'token': token,
+                    'eula': False,
+                    'xp': 0,
+                    'currency_blood_cells': 0,
+                    'currency_iron': 0,
+                    'currency_ink_cells': 0,
+                    'unlocked_items': []
                 }
 
                 self.dyn_collection.insert_one(new_document)
@@ -58,10 +64,50 @@ class Mongo:
                 return steamid, token
             else:
                 print(f"No user found with userId: {userId}")
-                return None, None
+                return "10000000aa000000gg00001", "10000000aa000000gg00001"
         except Exception as e:
             print(e)
             return None, None
+
+    def eula(self, userId, get_eula, server, db, collection):
+        try:
+            self.dyn_server = server
+            self.dyn_db = db
+            self.dyn_collection = collection
+            client = pymongo.MongoClient(self.dyn_server)
+            self.dyn_db = client[self.dyn_db]
+            self.dyn_collection = self.dyn_db[self.dyn_collection]
+            existing_document = self.dyn_collection.find_one({'userId': userId})
+            if existing_document:
+                if get_eula:
+                    eula = existing_document['eula']
+                    return eula
+                else:
+                    self.dyn_collection.update_one({'userId': userId}, {'$set': {'eula': True}})
+                    return True
+            else:
+                print(f"No user found with userId: {userId}")
+                return False
+        except Exception as e:
+            print(e)
+            return None, None
+
+    def get_debug(self, steamid, server, db, collection):
+        try:
+            self.dyn_server = server
+            self.dyn_db = db
+            self.dyn_collection = collection
+            client = pymongo.MongoClient(self.dyn_server)
+            self.dyn_db = client[self.dyn_db]
+            self.dyn_collection = self.dyn_db[self.dyn_collection]
+            existing_document = self.dyn_collection.find_one({'steamid': steamid})
+            if existing_document:
+                return existing_document
+            else:
+                return {"status": "error", "message": "No user found with steamid: " + steamid}
+        except Exception as e:
+            print(e)
+            return {"status": "error", "message": "Error in mongodb_handler"}
 
 
 mongo = Mongo()

@@ -4,18 +4,29 @@ import flask_definitions
 from flask_definitions import *
 import os
 
+from logic.mongodb_handler import mongo
+
 
 @app.route("/gamenews/messages", methods=["GET"])
 def gamenews():
     get_remote_ip()
+    # /gamenews/messages?sortDesc=true&gameVersion=0&platform=PC&language=EN&messageType=InGameNews&faction=Runner&playerLevel=1
     try:
+        sort_desc = request.args.get('sortDesc')
+        gameVersion = request.args.get('gameVersion')
+        platform = request.args.get('platform')
+        language = request.args.get('language')
+        messageType = request.args.get('messageType')
+        faction = request.args.get('faction')
+        playerLevel = request.args.get('playerLevel')
         print("Responded to game news api call GET")
-        return jsonify({"news": [
-            {"contentTags": ["steam", "xbox", "ps4", "grdk", "xsx", "ps5", "egs", "stadia", "switch"],
-             "description": "It's not The Clown's Bottles making you see double.<br/><br/>From September 1st 11AM ET - September 8th 11AM ET, earn twice the XP from Trials and Emblems.",
-             "dwnImagePath": "", "imageHeight": "", "imagePath": "", "isHidden": False,
-             "startDate": "2022-09-01T15:00:00", "title": "Double XP Event", "type": 5, "version": "6.2.0",
-             "weight": 40990.0}]})
+        return jsonify({"status": "success","data": {"messages": [{"id": 12345,"title": "Welcome, Runner!","content": "Test.","date": "2023-06-17","type": "InGameNews"},{"id": 67890,"title": "Level up and unlock new abilities!","content": "Congratulations on reaching level 1! As a Runner, you've unlocked the ability to perform powerful parkour moves. Use them to your advantage!","date": "2023-06-16","type": "InGameNews"},{"id": 54321,"title": "Special Event: Test 3.","content": "This is a Test!","date": "2023-06-15","type": "InGameNews"}]}})
+        # return jsonify({"news": [
+        #    {"contentTags": ["steam", "xbox", "ps4", "grdk", "xsx", "ps5", "egs", "stadia", "switch"],
+        #     "description": "It's not The Clown's Bottles making you see double.<br/><br/>From September 1st 11AM ET - September 8th 11AM ET, earn twice the XP from Trials and Emblems.",
+        #     "dwnImagePath": "", "imageHeight": "", "imagePath": "", "isHidden": False,
+        #     "startDate": "2022-09-01T15:00:00", "title": "Double XP Event", "type": 5, "version": "6.2.0",
+        #     "weight": 40990.0}]})
     except TimeoutError:
         print("Timeout error")
         return jsonify({"status": "error"})
@@ -36,8 +47,9 @@ def config_ver_latest_client_data():
         logger.graylog_logger(level="error", handler="general-ver-latest-data", message=f"Error in config_ver_latest_client_data: {e}")
 
 
-@app.route("/api/v1/utils/contentVersion/latest/2.2", methods=["GET"])
-def content_version_latest():
+@app.route("/api/v1/utils/contentVersion/latest/<version>", methods=["GET"])
+def content_version_latest(version):
+    print("Versions = " + version)
     get_remote_ip()
     try:
         print("Responded to content version api call GET")
@@ -155,69 +167,32 @@ def services_tex():
         logger.graylog_logger(level="error", handler="general-services-tex", message=f"Error in services_tex: {e}")
 
 
-@app.route("/api/v1/utils/contentVersion/latest/2.11", methods=["GET"])
-def content_version():
-    get_remote_ip()
-    try:
-        print("Responded to content version api call GET")
-        return jsonify({
-                           "latestSupportedVersion": "te-18f25613-36778-ue4-374f864b"})  # Don't know if this is correct. Just testing.
-    except TimeoutError:
-        print("Timeout error")
-        return jsonify({"status": "error"})
-    except Exception as e:
-        logger.graylog_logger(level="error", handler="general-content-version", message=f"Error in content_version: {e}")
-
-
-@app.route("/api/v1/utils/contentVersion/latest/0", methods=["GET"])
-def content_version0():
-    get_remote_ip()
-    try:
-        print("Responded to content version api call GET")
-        return jsonify({
-            "latestSupportedVersion": "te-18f25613-36778-ue4-374f864b"})  # Don't know if this is correct. Just testing.
-    except TimeoutError:
-        print("Timeout error")
-        return jsonify({"status": "error"})
-    except Exception as e:
-        logger.graylog_logger(level="error", handler="general-content-version0", message=f"Error in content_version0: {e}")
-
-
-@app.route("/api/v1/utils/contentVersion/latest/1.1", methods=["GET"])
-def content_version1():
-    get_remote_ip()
-    try:
-        print("Responded to content version api call GET")
-        return jsonify({
-            "latestSupportedVersion": "te-18f25613-36778-ue4-374f864b"})  # Don't know if this is correct. Just testing.
-    except TimeoutError:
-        print("Timeout error")
-        return jsonify({"status": "error"})
-    except Exception as e:
-        logger.graylog_logger(level="error", handler="general-content-version1", message=f"Error in content_version1: {e}")
-
-
 @app.route("/api/v1/consent/eula2", methods=["PUT", "GET"])
 def consent_eula():
     get_remote_ip()
-    if request.method == "PUT":
-        try:
-            print("Responded to consent eula api call PUT")
-            return jsonify({"status": "success"})
-        except TimeoutError:
-            print("Timeout error")
-            return jsonify({"status": "error"})
-        except Exception as e:
-            logger.graylog_logger(level="error", handler="general-consent-eula", message=f"Error in consent_eula: {e}")
-    elif request.method == "GET":
-        try:
-            print("Responded to consent eula api call GET")
-            return jsonify({"isGiven": True})
-        except TimeoutError:
-            print("Timeout error")
-            return jsonify({"status": "error"})
-        except Exception as e:
-            logger.graylog_logger(level="error", handler="general-consent-eula", message=f"Error in consent_eula: {e}")
+    try:
+        if request.method == "PUT":
+            userid = request.cookies.get('bhvrSession')
+            try:
+                mongo.eula(userId=userid, get_eula=False, server=mongo_host, db=mongo_db, collection=mongo_collection)
+                print("Responded to consent eula api call PUT")
+                return jsonify({"isGiven": True})
+            except TimeoutError:
+                print("Timeout error")
+                return jsonify({"status": "error"})
+            except Exception as e:
+                logger.graylog_logger(level="error", handler="general-consent-eula", message=f"Error in consent_eula: {e}")
+        elif request.method == "GET":
+            if request.cookies.get('bhvrSession') is None:
+                return jsonify({"isGiven": True})
+            userid = request.cookies.get('bhvrSession')
+            is_given = mongo.eula(userId=userid, get_eula=True, server=mongo_host, db=mongo_db, collection=mongo_collection)
+            if is_given:
+                return jsonify({"isGiven": True})
+            else:
+                return jsonify({"isGiven": False})
+    except Exception as e:
+        logger.graylog_logger(level="error", handler="general-consent-eula", message=f"Error in consent_eula: {e}")
 
 
 @app.route("/api/v1/consent/eula", methods=["GET"])
@@ -272,22 +247,37 @@ def file_gold_rush(seed, map_name, game_version):
     print(seed)
     print(map_name)
 
-    file_name = f"{game_version}_{seed}_{map_name}.b64"
+    file_name = f"{game_version}_{seed}_{map_name}.raw"
     folder_path = os.path.join(app.root_path, "map_seeds")
     file_path = os.path.join(folder_path, file_name)
     os.makedirs(folder_path, exist_ok=True)
 
     if request.method == "GET":
         if os.path.isfile(file_path):
-            with open(file_path, "r") as files:
+            with open(file_path, "rb") as files:
                 data = files.read()
-                encoded_data = base64.b64encode(data)
-                return encoded_data
+                return data
 
     if request.method == "POST":
         data = request.get_data()
-        decoded_data = base64.b64decode(data)
         with open(file_path, "wb") as files:
-            files.write(decoded_data)
+            files.write(data)
         return {"status": "success"}
 
+
+@app.route("/api/v1/extensions/leaderboard/getScores", methods=["GET", "POST"])
+def leaderboard_get_scores():
+    get_remote_ip()
+    if request.method == "POST":
+        print("Responded to leaderboard getScores api call POST")
+        logger.graylog_logger(level="info", handler="general-leaderboard-get-scores", message=f"Leaderboard getScores: {request.get_json()}")
+        return jsonify({"status": "success"})
+    else:
+        try:
+            print("Responded to leaderboard getScores api call GET")
+            return jsonify({"status": "success", "scores": []})
+        except TimeoutError:
+            print("Timeout error")
+            return jsonify({"status": "error"})
+        except Exception as e:
+            logger.graylog_logger(level="error", handler="general-leaderboard-get-scores", message=f"Error in leaderboard_get_scores: {e}")
