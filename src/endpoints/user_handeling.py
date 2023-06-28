@@ -148,17 +148,48 @@ def progression_experience():
 def challenges_get_challenges():
     get_remote_ip()
     try:
-        print("Responded to challenges get challenges api call POST")
-        logger.graylog_logger(level="info", handler="challenges_get_challenges", message=request.get_json())
-        return jsonify({"Id": "ECCBA78D4055676F9C17D79B9D5FA2D4", "Type": 2, "Title": "Hunter_DroneCharger_Name",
-                        "Body": "Hunter_DroneCharger_DESC", "Progress": 1, "ValueToReach": 10, "TimeLeft": 1440000000,
-                        "ShouldShowCompleteAnimation": True, "Rewards":
-                            [{"Type": "", "Id": "C90F72FC4D61B1F2FBC73F8A4685EA41", "Amount": 1.0, "Claimed": False}]})
+        challenge_type = request.get_json()
+        if challenge_type == "Weekly":
+            return jsonify({"Challenges": ["ARBDamage_HunterWeekly", "AssaultRifleWins_HunterWeekly",
+                                           "BleedOut_HunterWeekly", "BleedOut_RunnerWeekly", "Damage_HunterWeekly",
+                                           "Double_HunterWeekly", "ActivateDrones", "Efficient_HunterWeekly",
+                                           "Emotional_HunterWeekly", "Emotional_RunnerWeekly", "Greed_HunterWeekly",
+                                           "Greed_RunnerWeekly", "Headshot", "HuntingShotgun_HunterWeekly",
+                                           "InDenial_HunterWeekly", "LMGWins_HunterWeekly", "Hunter_WeeklyMines_Name",
+                                           "Mines_RunnerWeekly", "Reveals_HunterWeekly", "RingOut_HunterWeekly",
+                                           "Shields_RunnerWeekly", "ShotgunDowns_HunterWeekly", "Speed_HunterWeekly",
+                                           "Speed_RunnerWeekly", "Stuns_RunnerWeekly", "Turrets_HunterWeekly",
+                                           "Turrets_RunnerWeekly", "BleedOut_RunnerWeekly", "Wasteful_HunterWeekly",
+                                           "Wasteful_RunnerWeekly", "WUP_HunterWeekly", "WUP_RunnerWeekly"]})
+        elif challenge_type == "Daily":
+            return jsonify({"Challenges": ["Daily_Domination_Hunter", "Daily_Domination_Runner"]})
+        else:
+            return jsonify({"status": "error"})
+
     except TimeoutError:
         print("Timeout error")
         return jsonify({"status": "error"})
     except Exception as e:
-        logger.graylog_logger(level="error", handler="getChallanges", message=str(e))
+        logger.graylog_logger(level="error", handler="getChallanges", message=e)
+
+
+@app.route("/api/v1/extensions/challenges/executeChallengeProgressionOperationBatch", methods=["POST"])
+def challenges_execute_challenge_progression_operation_batch():
+    get_remote_ip()
+    try:
+        print("Responded to challenges execute challenge progression operation batch api call POST")
+        logger.graylog_logger(level="info", handler="logging_executeChallengeProgressionOperationBatch",
+                                message=request.get_json())
+        return jsonify({"Id": "AssaultRifleWins_HunterWeekly", "Type": 2, "Title": "Hunter_DroneCharger_Name",
+                        "Body": "Hunter_DroneCharger_DESC", "Progress": 1, "ValueToReach": 10, "TimeLeft": 1440000000,
+                        "ShouldShowCompleteAnimation": True, "Rewards":
+                            [{"Type": "Weekly", "Id": "C90F72FC4D61B1F2FBC73F8A4685EA41", "Amount": 1.0, "Claimed": False}]})
+    except TimeoutError:
+        print("Timeout error")
+        return jsonify({"status": "error"})
+    except Exception as e:
+        logger.graylog_logger(level="error", handler="logging_executeChallengeProgressionOperationBatch",
+                                message=str(e))
 
 
 # idk dont think it works
@@ -173,7 +204,15 @@ def inventories():
         userid = request.cookies.get('bhvrSession')
         if page == 0:
             return jsonify({"Code": 200, "Message": "OK", "Data": {"PlayerId": userid, "Inventory": [
-                {"ObjectId": "CCA2272D-408ED953-87F017BE-D437FF9A", "Quantity": 1, "LastUpdateAt": 1687377305},
+                {"ObjectId": "56B7B6F6-473712D0-B7A2F992-BB2C16CD", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "759E44DD-469C2841-75C2D6A1-AB0B0FA7", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "EF96A202-49884D43-7B87A6A4-BDE81B7F", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "755D4DFE-40DA1512-B01E3D8C-FF3C8D4D", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "CCA2272D-408ED953-87F017BE-D437FF9A", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "C50FFFBF-46866131-82F45890-651797CE", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "606129DC-45AB9D16-B69E2FA5-C99A9835", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "234FFD46-4C55514B-6C1E7386-45993CAA", "Quantity": 1, "LastUpdateAt": 16873773050},
+                {"ObjectId": "0EA4B7BD-456E322E-E1F0E1BD-6D92F269", "Quantity": 1, "LastUpdateAt": 1687377305},
                 {"ObjectId": "51595917-43CBF0B5-7EC6FEB3-341960D6", "Quantity": 1, "LastUpdateAt": 1687377305},
                 {"ObjectId": "08DC38B6-470A7A5B-0BA025B9-6279DAA8", "Quantity": 1, "LastUpdateAt": 1687377305},
                 {"ObjectId": "7902D836-470BBB49-DE9B9D97-F17C9DB5", "Quantity": 1, "LastUpdateAt": 1687377305},
@@ -196,7 +235,6 @@ def inventories():
         elif page == 1:
             return jsonify({"Code": 200, "Message": "OK", "Data": {"PlayerId": userid, "Inventory": [
                 {"ObjectId": "DA7C176F-48525599-C9477C95-137C7369", "Quantity": 1, "LastUpdateAt": 1687377305},
-                {"ObjectId": "CAC131D2482955DA298BA59AA3C862A7", "Quantity": 1, "LastUpdateAt": 1687377305},
                 {"ObjectId": "C1672541-4A4B16B9-AD557C9E-E865D113", "Quantity": 1, "LastUpdateAt": 1687377305}
             ], "NextPage": 0}})
     except TimeoutError:
@@ -312,6 +350,11 @@ def wallet_currencies_progression():
 def achievements_get():
     get_remote_ip()
     try:
+        userid = request.cookies.get("bhvrSession")
+        return jsonify({"UserId": userid, "StateName": "", "Segment": "", "List": [
+            {"ObjectId": "EFAB89E6465D1163D62A07B11048F2B6", "Version": 11, "SchemaVersion": 11, "Data": {}}
+        ]})
+        # This works but lemme test smthing...
         return jsonify({"gameName":"Deathgarden: BLOODHARVEST","achievements":
             [{"apiname":"EFAB89E6465D1163D62A07B11048F2B6","achieved":1,"unlocktime":1587140058},
              {"apiname":"2CAEBB354D506D7C43B941BC1DA775A0","achieved":1,"unlocktime":1586792410},
@@ -330,7 +373,7 @@ def achievements_get():
 def messages_count():
     get_remote_ip()
     try:
-        return jsonify({"Count": 69})
+        return jsonify({"Count": 1})
     except TimeoutError:
         print("Timeout error")
         return jsonify({"status": "error"})
