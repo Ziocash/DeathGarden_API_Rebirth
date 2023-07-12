@@ -4,13 +4,29 @@ from logic.mongodb_handler import mongo
 
 @app.route('/', methods=["GET"])
 def index():
-    get_remote_ip()
+    check_for_game_client()
     return render_template("index.html")
 
 
-# @app.route('/debug/user/', methods=['GET'])
-# def debug_user():
-#     return debug_user(False)
+@app.route('/robots.txt', methods=["GET"])
+def robots():
+    return send_from_directory(app.static_folder, request.path[1:])
+
+
+@app.route('/.well-known/security.txt', methods=["GET"])
+def security():
+    return send_from_directory(app.static_folder, request.path[1:])
+
+
+@app.route('/.well-known/gpc.json', methods=["GET"])
+def gpc():
+    return send_from_directory(app.static_folder, request.path[1:])
+
+
+@app.route('/.well-known/dnt-policy.txt', methods=["GET"])
+def dnt():
+    return send_from_directory(app.static_folder, request.path[1:])
+
 
 @app.route('/debug/user/', methods=['GET'], defaults={'steamid': None})
 @app.route('/debug/user/<steamid>', methods=['GET'])
@@ -49,7 +65,7 @@ def debug_user(steamid):
 
 @app.route("/debug/mirrors", methods=["POST", "GET"])
 def debug_mirrors_write():
-    get_remote_ip()
+    check_for_game_client("soft")
     try:
         if request.method == "POST":
             try:
