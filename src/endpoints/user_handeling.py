@@ -51,19 +51,24 @@ def steam_login():
     ip = check = check_for_game_client("strict")  # ToDo: Change when cookie validation is added.
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+
     user_agent = request.headers.get('User-Agent')
     if user_agent.startswith("TheExit/++UE4+Release-4.2"):
         if request.args.get(
                 'token') == "140000007B7B7B7B02000000E3FA3952010010017B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B7B":
-            return_val = jsonify(
-                {"preferredLanguage": "en", "friendsFirstSync": {"steam": True}, "fixedMyFriendsUserPlatformId":
-                    {"steam": True}, "id": "aaaa", "provider": {"providerId": "aaaa", "providerName": "steam", "userId":
-                    "aaaa"}, "providers": [{"providerName": "steam", "providerId": "aaaa"}], "friends": [],
-                 "triggerResults":
-                     {"success": [], "error": []}, "tokenId": "aaaa", "generated": 1687197541,
-                 "expire": 1887197541,
-                 "userId": "aaaa", "token": "aaaa"})
-            session_cookie = session_manager.create_session("Debug_session")
+            userid, token = mongo.user_db_handler("Debug_session", mongo_host, mongo_db, mongo_collection)
+            current_time, expire_time = get_time()
+            return_val = jsonify({"preferredLanguage": "en", "friendsFirstSync": {"steam": True},
+                                  "fixedMyFriendsUserPlatformId":
+                                      {"steam": True}, "id": userid,
+                                  "provider": {"providerId": userid, "providerName": "steam", "userId":
+                                      userid}, "providers": [{"providerName": "steam", "providerId": userid}],
+                                  "friends": [],
+                                  "triggerResults":
+                                      {"success": [], "error": []}, "tokenId": userid, "generated": current_time,
+                                  "expire": expire_time,
+                                  "userId": userid, "token": token})
+            session_cookie = session_manager.create_session(userid)
             return_val.set_cookie("bhvrSession", session_cookie)
             return return_val
         try:
@@ -99,6 +104,8 @@ def modifiers():
     if not session_cookie:
         return jsonify({"message": "Endpoint not found"}), 404
     userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     steamid, token = mongo.get_data_with_list(login=userid, login_steam=False,
                                               items={"token", "steamid"}, server=mongo_host, db=mongo_db,
                                               collection=mongo_collection)
@@ -117,30 +124,22 @@ def moderation_check_username():
     check = check_for_game_client("strict")
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
-        session_cookie = request.cookies.get("bhvrSession")
-        if not session_cookie:
-            return jsonify({"message": "Endpoint not found"}), 404
-        userid = session_manager.get_user_id(session_cookie)
-        print(request.get_json())
         request_var = request.get_json()
         userid = request_var["userId"]
-        username = request_var["username"]
-        logger.graylog_logger(level="info", handler="moderation_check_username", message=request.get_json())
-
         steamid = mongo.get_data_with_list(login=userid, login_steam=False,
-                                                  items={"steamid"}, server=mongo_host, db=mongo_db,
-                                                  collection=mongo_collection)
-        if steamid is None:
-            time.sleep(1)
-            request_var = request.get_json()
-            userid = request_var["userId"]
-            username = request_var["username"]
-            steamid = mongo.get_data_with_list(login=userid, login_steam=False,
-                                                      items={"steamid"}, server=mongo_host, db=mongo_db,
-                                                      collection=mongo_collection)
+                                           items={"steamid", "userId"}, server=mongo_host, db=mongo_db,
+                                           collection=mongo_collection)
+        steamid = steamid["steamid"]
+        userid = steamid["userId"]
         return jsonify({"Id": userid, "Token": session_cookie,
-                        "Provider": {"ProviderName": username,
+                        "Provider": {"ProviderName": request_var["username"],
                                      "ProviderId": steamid}})  # CLIENT:{"userId": "ID-ID-ID-ID-SEE-AUTH",	"username": "Name-Name-Name"}
     except TimeoutError:
         return jsonify({"status": "error"})
@@ -153,6 +152,12 @@ def moderation_check_username():
 def progression_experience():
     check = check_for_game_client("strict")
     if not check:
+        return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
         return jsonify({"message": "Endpoint not found"}), 404
     try:
         logger.graylog_logger(level="info", handler="user_handling_progression_experience", message=request.get_json())
@@ -192,6 +197,12 @@ def challenges_get_challenges():
     check = check_for_game_client("strict")
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         response = request.get_json()
         challenge_type = response["data"]["challengeType"]
@@ -223,6 +234,12 @@ def challenges_execute_challenge_progression_operation_batch():
     check = check_for_game_client("strict")
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         logger.graylog_logger(level="info", handler="logging_executeChallengeProgressionOperationBatch",
                               message=request.get_json())
@@ -244,13 +261,15 @@ def inventories():
     check = check_for_game_client("strict")
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         page = request.args.get('page', default=0, type=int)
         limit = request.args.get('limit', default=500, type=int)
-        session_cookie = request.cookies.get("bhvrSession")
-        if not session_cookie:
-            return jsonify({"message": "Endpoint not found"}), 404
-        userid = session_manager.get_user_id(session_cookie)
         if page == 0:
             return jsonify({"Code": 200, "Message": "OK", "Data": {"PlayerId": userid, "Inventory": [
                 {"ObjectId": "56B7B6F6-473712D0-B7A2F992-BB2C16CD", "Quantity": 1, "LastUpdateAt": 16873773050},
@@ -303,6 +322,8 @@ def progression_groups():
         if not session_cookie:
             return jsonify({"message": "Endpoint not found"}), 404
         userid = session_manager.get_user_id(session_cookie)
+        if userid == 401:
+            return jsonify({"message": "Endpoint not found"}), 404
         #  This is the real code but need to build this first
         # return jsonify({"UserId": userid, "StateName": "Fstring", "Segment": "Fstring", "ObjectId": "Fstring",
         #                "Version": 1111, "schemaVersion": 1111, "Data": {}})
@@ -333,6 +354,8 @@ def ban_status():
     if not session_cookie:
         return jsonify({"message": "Endpoint not found"}), 404
     userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         time.sleep(0.5)
         ban_data = mongo.get_data_with_list(login=userid, login_steam=False,
@@ -366,6 +389,12 @@ def get_ban_info():
     check = check_for_game_client("strict")
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         return jsonify({"BanPeriod": None, "BanReason": None, "BanStart": None, "BanEnd": None,
                         "Confirmed": False})
@@ -385,6 +414,8 @@ def wallet_currencies():
     if not session_cookie:
         return jsonify({"message": "Endpoint not found"}), 404
     userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         currencies = mongo.get_data_with_list(login=userid, login_steam=False,
                                               items={"currency_blood_cells", "currency_iron", "currency_ink_cells"},
@@ -411,6 +442,12 @@ def wallet_currencies_progression():
     check = check_for_game_client("strict")
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         return jsonify([{"Currency": 1, "Amount": 10}, {"Currency": 2, "Amount": 10}, {"Currency": 3, "Amount": 10}])
     except TimeoutError:
@@ -430,6 +467,8 @@ def achievements_get():
         if not session_cookie:
             return jsonify({"message": "Endpoint not found"}), 404
         userid = session_manager.get_user_id(session_cookie)
+        if userid == 401:
+            return jsonify({"message": "Endpoint not found"}), 404
         return jsonify({"UserId": userid, "StateName": "", "Segment": "", "List": [
             {"ObjectId": "EFAB89E6465D1163D62A07B11048F2B6", "Version": 11, "SchemaVersion": 11, "Data": {}}
         ]})
@@ -450,6 +489,12 @@ def achievements_get():
 @app.route("/api/v1/messages/count", methods=["GET"])
 def messages_count():
     check = check_for_game_client("strict")
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
     try:
@@ -464,6 +509,12 @@ def messages_count():
 def messages_list():
     check = check_for_game_client("strict")
     if not check:
+        return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
         return jsonify({"message": "Endpoint not found"}), 404
     try:
         limit = request.args.get("limit")
@@ -481,6 +532,12 @@ def messages_list():
 def moderation_check_chat():
     check = check_for_game_client("strict")
     if not check:
+        return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
         return jsonify({"message": "Endpoint not found"}), 404
     try:
         data = request.get_json()
@@ -500,6 +557,12 @@ def moderation_check_chat():
 def extension_progression_init_or_get_groups():
     check = check_for_game_client("strict")
     if not check:
+        return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
         return jsonify({"message": "Endpoint not found"}), 404
     try:
         logger.graylog_logger(level="info", handler="logging_initOrGetGroups", message=request.get_json())
@@ -567,6 +630,12 @@ def inventory_unlock_special_items():
     check = check_for_game_client("strict")
     if not check:
         return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
+        return jsonify({"message": "Endpoint not found"}), 404
     try:
         logger.graylog_logger(level="info", handler="unknown_unlockSpecialItems", message=request.get_json())
         return jsonify({"UnlockedItems": ["9F54DE7A-4E15935B-503850A1-27B0A2A4"]})
@@ -580,6 +649,12 @@ def inventory_unlock_special_items():
 def challenges_get_challenge_progression_batch():
     check = check_for_game_client("strict")
     if not check:
+        return jsonify({"message": "Endpoint not found"}), 404
+    session_cookie = request.cookies.get("bhvrSession")
+    if not session_cookie:
+        return jsonify({"message": "Endpoint not found"}), 404
+    userid = session_manager.get_user_id(session_cookie)
+    if userid == 401:
         return jsonify({"message": "Endpoint not found"}), 404
     try:
         logger.graylog_logger(level="info", handler="logging_getChallengeProgressionBatch",
