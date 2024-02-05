@@ -44,6 +44,109 @@ def steam_login_function():
         logger.graylog_logger(level="error", handler="steam_login", message=e)
 
 
+def get_init_or_get_groups(userid, request_data):
+    data = {}
+    skip_progression_groups = request_data["data"]["skipProgressionGroups"]
+    skip_metadata_groups = request_data["data"]["skipMetadataGroups"]
+    if not skip_progression_groups:
+        data["ProgressionGroups"] = [
+            {
+                "ObjectId": "RunnerProgression",
+                "Version": 1,
+                "SchemaVersion": 1.1,
+                "Data": {
+                    "Experience": {
+                        "Level": 1,
+                        "CurrentExperience": 2,
+                        "ExperienceToReach": 30
+                    }
+                }
+            },
+            {
+                "ObjectId": "HunterProgression",
+                "Version": 1,
+                "SchemaVersion": 1.1,
+                "Data": {
+                    "Experience": {
+                        "Level": 1,
+                        "CurrentExperience": 12,
+                        "ExperienceToReach": 30
+                    }
+                }
+            },
+            {
+                "ObjectId": "PlayerProgression",
+                "Version": 1,
+                "SchemaVersion": 1.1,
+                "Data": {
+                    "Experience": {
+                        "Level": 1,
+                        "CurrentExperience": 12,
+                        "ExperienceToReach": 30
+                    }
+                }
+            }
+        ]
+    if not skip_metadata_groups:
+        last_played_faction = mongo.get_data_with_list(login=userid, login_steam=False, items={"last_played_faction"})
+        tutorial_completed = mongo.get_data_with_list(login=userid, login_steam=False, items={"tutorial_completed"})
+        last_runner = mongo.get_data_with_list(login=userid, login_steam=False, items={"last_runner"})
+        last_hunter = mongo.get_data_with_list(login=userid, login_steam=False, items={"last_hunter"})
+        hasPlayedDeathGarden1 = mongo.get_data_with_list(login=userid, login_steam=False,
+                                                         items={"hasPlayedDeathGarden1"})
+        print(last_played_faction, tutorial_completed, last_runner, last_hunter)
+        # {'last_played_faction': 'Runner'} {'tutorial_completed': False} {'last_runner': 'Runner.Fog'} {'last_hunter': 'Hunter.Inquisitor'}
+        runner_name = last_runner["last_runner"][7:]
+        hunter_name = last_hunter["last_hunter"][7:]
+        runner_equipment = mongo.get_data_with_list(login=userid, login_steam=False, items={runner_name})
+        hunter_equipment = mongo.get_data_with_list(login=userid, login_steam=False, items={hunter_name})
+        logger.graylog_logger(level="info", handler="logging_initOrGetGroups", message=request.get_json())
+        # print(runner_equipment, hunter_equipment)
+
+        runner_data = {"CharacterId": {"TagName": last_runner["last_runner"]},
+                       "Equipment": runner_equipment[runner_name]["Equipment"],
+                       "EquippedPerks": runner_equipment[runner_name]["EquippedPerks"],
+                       "EquippedPowers": runner_equipment[runner_name]["EquippedPowers"],
+                       "EquippedWeapons": runner_equipment[runner_name]["EquippedWeapons"],
+                       "EquippedBonuses": runner_equipment[runner_name]["EquippedBonuses"]}
+
+        hunter_data = {"CharacterId": {"TagName": last_hunter["last_hunter"]},
+                       "Equipment": hunter_equipment[hunter_name]["Equipment"],
+                       "EquippedPerks": hunter_equipment[hunter_name]["EquippedPerks"],
+                       "EquippedPowers": hunter_equipment[hunter_name]["EquippedPowers"],
+                       "EquippedWeapons": hunter_equipment[hunter_name]["EquippedWeapons"],
+                       "EquippedBonuses": hunter_equipment[hunter_name]["EquippedBonuses"]}
+        print(runner_equipment)
+        print(runner_equipment[runner_name])
+
+        player_data = {"LastPlayedFaction": last_played_faction["last_played_faction"],
+                       "LastPlayedRunnerId": {"tagName": last_runner["last_runner"]},
+                       "LastPlayedHunterId": {"tagName": last_hunter["last_hunter"]},
+                       "shouldPlayWithoutContextualHelp": tutorial_completed["tutorial_completed"],
+                       "hasPlayedDeathGarden1": hasPlayedDeathGarden1["hasPlayedDeathGarden1"]}
+        data["MetadataGroups"] = [
+            {
+                "ObjectId": "RunnerMetadata",
+                "Version": 1,
+                "SchemaVersion": 1.1,
+                "Data": runner_data
+            },
+            {
+                "ObjectId": "HunterMetadata",
+                "Version": 1,
+                "SchemaVersion": 1.1,
+                "Data": hunter_data
+            },
+            {
+                "ObjectId": "PlayerMetadata",
+                "Version": 1,
+                "SchemaVersion": 1.1,
+                "Data": player_data
+            }
+        ]
+    return data
+
+
 # This works
 @app.route("/api/v1/auth/provider/steam/login", methods=["POST"])
 def steam_login():
@@ -108,6 +211,22 @@ def modifiers():
     except Exception as e:
         logger.graylog_logger(level="error", handler="modifiers_me", message=e)
 
+@app.route("/api/v1/modifierCenter/modifiers/<userid>", methods=["GET"])
+def modifiers_userid(userid):
+    check_for_game_client("strict")
+    session_cookie = sanitize_input(request.cookies.get("bhvrSession"))
+    userid = session_manager.get_user_id(session_cookie)
+
+    steamid, token = mongo.get_data_with_list(login=userid, login_steam=False,
+                                              items={"token", "steamid"})
+    try:
+        return jsonify({"TokenId": token, "UserId": userid, "RoleIds": ["755D4DFE-40DA1512-B01E3D8C-FF3C8D4D",
+                                                                        "C50FFFBF-46866131-82F45890-651797CE"]})
+    except TimeoutError:
+        return jsonify({"status": "error"})
+    except Exception as e:
+        logger.graylog_logger(level="error", handler="modifiers_me", message=e)
+
 
 # This works
 @app.route("/moderation/check/username", methods=["POST"])
@@ -119,7 +238,14 @@ def moderation_check_username():
     try:
         request_var = request.get_json()
         userid = sanitize_input(request_var["userId"])
+        username = sanitize_input(request_var["username"])
         steamid, token = mongo.get_user_info(userId=userid)
+        # temp test
+        return jsonify({
+            "PlayerName": username,
+            "UserId": steamid
+        })
+        #
         return jsonify({"Id": userid, "Token": token,
                         "Provider": {"ProviderName": request_var["username"],
                                      "ProviderId": steamid}})  # CLIENT:{"userId": "ID-ID-ID-ID-SEE-AUTH",	"username": "Name-Name-Name"}
@@ -392,6 +518,9 @@ def wallet_currencies():
                                   "CurrencyGroup": "HardCurrencyGroup", "LastRefillTimeStamp": "1684862187"},
                                  {"Currency": "PROGRESSION_CURRENCY", "Balance": 10000,
                                   "CurrencyGroup": "HardCurrencyGroup", "LastRefillTimeStamp": "1684862187"}]})
+    except TypeError:
+        return jsonify({"status": "error"})
+
     except TimeoutError:
         return jsonify({"status": "error"})
     except Exception as e:
@@ -601,68 +730,128 @@ def extension_progression_init_or_get_groups():
     userid = session_manager.get_user_id(session_cookie)
 
     try:
-        logger.graylog_logger(level="info", handler="logging_initOrGetGroups", message=request.get_json())
         # Client sends: {"data":{"skipProgressionGroups":false,"skipMetadataGroups":false,"playerName":"Steam-Name-Here"}}
         # The client cant understand CharacterId for some reason??? But if this is removed the game doesn't load the
         # "Choose Hunter or Runner" screen.
-        return jsonify({
-       "ProgressionGroups":[
-          {
-             "ObjectId":"43CD7EEC-4AB9D6FA-B8EB9387-1964FC60",
-             "Version":1,
-             "SchemaVersion":1.1,
-             "Data":{
-                "Experience":{
-                   "Level":1,
-                   "CurrentExperience":2,
-                   "ExperienceToReach":30
-                }
-             }
-          },
-          {
-             "ObjectId":"C50FFFBF-46866131-82F45890-651797CE",
-             "Version":1,
-             "SchemaVersion":1.1,
-             "Data":{
-                "Experience":{
-                   "Level":1,
-                   "CurrentExperience":12,
-                   "ExperienceToReach":30
-                }
-             }
-          }
-       ],
-       "MetadataGroups":[
-           {
-               "ObjectId": "43CD7EEC-4AB9D6FA-B8EB9387-1964FC60",
-               "Version": 1,
-               "SchemaVersion": 1.1,
-               "Data": {"CharacterId": {"TagName": "Runner.Smoke"},
-                        "Equipment": [],
-                        "EquippedPerks": ["1E08AFFA-485E92BA-FF2C1BB8-5CEFB81E"],
-                        "EquippedPowers": [],
-                        "EquippedWeapons": ["C8AF3D53-4973F82F-ADBB40BD-A96F9DCD"],
-                        "EquippedBonuses": []
-                        }
-           },
-           {
-               "ObjectId": "C50FFFBF-46866131-82F45890-651797CE",
-               "Version": 1,
-               "SchemaVersion": 1.1,
-               "Data": {"CharacterId": {"TagName": "Hunter.Stalker"},
-                        "Equipment": [],
-                        "EquippedPerks": ["791F12E0-47DA9E26-E246E385-9C3F587E"],
-                        "EquippedPowers": ["08DC38B6-470A7A5B-0BA025B9-6279DAA8"],
-                        "EquippedWeapons": ["307A0B13-417737DE-D675309F-8B978AB8"],
-                        "EquippedBonuses": []
-                        }
-          }
-       ]})
+        request_data = request.get_json()
+        data = get_init_or_get_groups(userid, request_data)
+        return jsonify(data)
 
     except TimeoutError:
         return jsonify({"status": "error"})
     except Exception as e:
         logger.graylog_logger(level="error", handler="logging_initOrGetGroups", message=e)
+
+
+@app.route("/api/v1/extensions/progression/updateMetadataGroup", methods=["POST"])
+def update_metadata_group():
+    check_for_game_client("strict")
+    session_cookie = sanitize_input(request.cookies.get("bhvrSession"))
+    userid = session_manager.get_user_id(session_cookie)
+    try:
+        fake_request = {"data": {"skipProgressionGroups": False, "skipMetadataGroups": False}}
+        data = request.get_json()
+        object_id = data["data"]["objectId"]
+        version = data["data"]["version"]
+        metadata = data["data"]["metadata"]
+        last_played_faction = metadata["lastPlayedFaction"]
+        last_played_runner_id = metadata["lastPlayedRunnerId"]
+        last_played_hunter_id = metadata["lastPlayedHunterId"]
+        should_play_without_contextual_help = metadata["shouldPlayWithoutContextualHelp"]
+        has_played_death_garden_1 = metadata["hasPlayedDeathGarden1"]
+        reason = data["data"]["reason"]
+
+        logger.graylog_logger(level="info", handler="logging_updateMetadataGroup", message=data)
+        # return jsonify({"status": "success"})
+        mongo.write_data_with_list(login=userid, login_steam=False,
+                                   items_dict={"last_played_faction": last_played_faction})
+        return jsonify({
+            "ProgressionGroups": [
+                {
+                    "ObjectId": "RunnerProgression",
+                    "Version": 1,
+                    "SchemaVersion": 1.1,
+                    "Data": {
+                        "Experience": {
+                            "Level": 1,
+                            "CurrentExperience": 2,
+                            "ExperienceToReach": 30
+                        }
+                    }
+                },
+                {
+                    "ObjectId": "HunterProgression",
+                    "Version": 1,
+                    "SchemaVersion": 1.1,
+                    "Data": {
+                        "Experience": {
+                            "Level": 1,
+                            "CurrentExperience": 12,
+                            "ExperienceToReach": 30
+                        }
+                    }
+                },
+                {
+                    "ObjectId": "PlayerProgression",
+                    "Version": 1,
+                    "SchemaVersion": 1.1,
+                    "Data": {
+                        "Experience": {
+                            "Level": 1,
+                            "CurrentExperience": 12,
+                            "ExperienceToReach": 30
+                        }
+                    }
+                }
+            ],
+            "MetadataGroups": [
+                {
+                    "ObjectId": "RunnerMetadata",
+                    "Version": 1,
+                    "SchemaVersion": 1.1,
+                    "Data": {"CharacterId": {"TagName": last_played_runner_id},
+                             "Equipment": [],
+                             "EquippedPerks": ["1E08AFFA-485E92BA-FF2C1BB8-5CEFB81E"],
+                             "EquippedPowers": [],
+                             "EquippedWeapons": ["C8AF3D53-4973F82F-ADBB40BD-A96F9DCD"],
+                             "EquippedBonuses": []
+                             }
+                },
+                {
+                    "ObjectId": "HunterMetadata",
+                    "Version": 1,
+                    "SchemaVersion": 1.1,
+                    "Data": {"CharacterId": {"TagName": last_played_hunter_id},
+                             "Equipment": [],
+                             "EquippedPerks": ["791F12E0-47DA9E26-E246E385-9C3F587E"],
+                             "EquippedPowers": ["08DC38B6-470A7A5B-0BA025B9-6279DAA8"],
+                             "EquippedWeapons": ["307A0B13-417737DE-D675309F-8B978AB8"],
+                             "EquippedBonuses": []
+                             }
+                },
+                {
+                    "ObjectId": "PlayerMetadata",
+                    "Version": 1,
+                    "SchemaVersion": 1.1,
+                    "Data": {
+                        "LastPlayedFaction": last_played_faction,
+                        "LastPlayedRunnerId": {"tagName": last_played_runner_id},
+                        "LastPlayedHunterId": {"tagName": last_played_hunter_id},
+                        "shouldPlayWithoutContextualHelp": should_play_without_contextual_help,
+                        "hasPlayedDeathGarden1": True
+                    }
+                }
+            ]})
+    except TimeoutError:
+        return jsonify({"status": "error"})
+    except Exception as e:
+        logger.graylog_logger(level="error", handler="logging_updateMetadataGroup", message=e)
+
+
+# POST https://api.zkwolf.com/api/v1/extensions/progression/updateMetadataGroup HTTP/1.1
+# {"data":{"objectId":"PlayerMetadata","version":2,"metadata":{
+# "lastPlayedFaction":"Runner","lastPlayedRunnerId":{"tagName":"Runner.Ink"},"lastPlayedHunterId":{"tagName":"None"},
+# "shouldPlayWithoutContextualHelp":false,"hasPlayedDeathGarden1":false},"reason":"SetLastPlayedCharacterId"}}
 
 
 # dont know if this works. Hope it does.
@@ -679,6 +868,24 @@ def inventory_unlock_special_items():
         return jsonify({"status": "error"})
     except Exception as e:
         logger.graylog_logger(level="error", handler="unknown_unlockSpecialItems", message=e)
+
+
+# POST https://api.zkwolf.com//api/v1/extensions/progression/resetCharacterProgressionForPrestige HTTP/1.1
+# {"data":{"characterId":"755D4DFE40DA1512B01E3D8CFF3C8D4D"}}
+@app.route("/api/v1/extensions/progression/resetCharacterProgressionForPrestige", methods=["POST"])
+def reset_prestige():
+    check_for_game_client("strict")
+    session_cookie = sanitize_input(request.cookies.get("bhvrSession"))
+    userid = session_manager.get_user_id(session_cookie)
+    try:
+        data = request.get_json()
+        character_id = data["data"]["characterId"]
+        logger.graylog_logger(level="info", handler="resetCharacterProgressionForPrestige", message=data)
+        return jsonify({"status": "success"})
+    except TimeoutError:
+        return jsonify({"status": "error"})
+    except Exception as e:
+        logger.graylog_logger(level="error", handler="resetCharacterProgressionForPrestige", message=e)
 
 
 @app.route("/api/v1/extensions/challenges/getChallengeProgressionBatch", methods=["POST"])
@@ -802,6 +1009,10 @@ def challenges_get_challenge_progression_batch():
                                                         "Id": "C90F72FC4D61B1F2FBC73F8A4685EA41",
                                                         "Amount": 1.0, "Claimed": False}]
                                        }})
+            elif challenge == "24CE65364362CB2A90C0E08876176937":
+                challenge_list.append({"challengeId": "24CE65364362CB2A90C0E08876176937",
+                                       "operationName": "complete"
+                                       })
             else:
                 logger.graylog_logger(level="error", handler="logging_missing_challenge",
                                       message=f"Unknown challenge id {challenge}")

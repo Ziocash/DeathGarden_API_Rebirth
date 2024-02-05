@@ -2,6 +2,7 @@ from flask_definitions import *
 import os
 
 from logic.mongodb_handler import mongo
+from logic.time_handler import get_date_and_time
 
 
 @app.route("/gamenews/messages", methods=["GET"])
@@ -11,6 +12,9 @@ def gamenews():
     userid = session_manager.get_user_id(session_cookie)
 
     # /gamenews/messages?sortDesc=true&gameVersion=0&platform=PC&language=EN&messageType=InGameNews&faction=Runner&playerLevel=1
+    # The game saves watched game news here: C:\Users\User\AppData\Local\TheExit\Saved\Config\WindowsNoEditor\GameUserSettings.ini
+    # In this Format: GameNewsViews=(("1", 4),("2", 1),("3", 1),("4", 1))
+    # The first number is the ID of the news, the second number is the amount of times the news window was opened
     try:
         sort_desc = sanitize_input(request.args.get('sortDesc'))
         gameVersion = sanitize_input(request.args.get('gameVersion'))
@@ -165,11 +169,12 @@ def healthcheck():
 
 @app.route("/api/v1/services/tex/")
 def services_tex():
+    current_time = get_date_and_time()
     try:
         user_agent = request.headers.get('User-Agent')
         if "TheExit/++UE4+Release-4.21-CL-0 Windows/" in user_agent:
             # EStashboard [0 Up, 1 Down, 2 Warning, 3 Failed]
-            # todo Set Timestamp to current time
+            # up, down, available
             return jsonify({
                 "description": "The Exit - Live",
                 "url": "https://api.zkwolf.com/api/v1/services/tex",
@@ -185,7 +190,7 @@ def services_tex():
                         "name": "Up"
                     },
                     "url": "https://api.zkwolf.com/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-                    "timestamp": "Wed, 07 Dec 2016 21:00:20 GMT",
+                    "timestamp": current_time,
                     "sid": "ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
                     "message": "up",
                     "informational": False
@@ -197,9 +202,54 @@ def services_tex():
             return {"current-event": {"status": {"id": "live"}, "message": ""}}  # Alpha 2 WARNING Msg text?!?!
 
     except TimeoutError:
-        return jsonify({"status": "error"})
+        return jsonify({
+            "description": "The Exit - Live",
+            "url": "https://api.zkwolf.com/api/v1/services/tex",
+            "list": None,
+            "current-event": {
+                "status": {
+                    "description": "The service is maybe working",
+                    "level": "ERROR",
+                    "default": True,
+                    "image": "https://api.zkwolf.com/images/icons/fugue/tick-circle.png",
+                    "url": "https://api.zkwolf.com/api/v1/statuses/up",
+                    "id": "available",
+                    "name": "available"
+                },
+                "url": "https://api.zkwolf.com/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
+                "timestamp": current_time,
+                "sid": "ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
+                "message": "available",
+                "informational": False
+            },
+            "id": "tex",
+            "name": "tex"
+        })
     except Exception as e:
         logger.graylog_logger(level="error", handler="general-services-tex", message=e)
+        return jsonify({
+            "description": "The Exit - Live",
+            "url": "https://api.zkwolf.com/api/v1/services/tex",
+            "list": None,
+            "current-event": {
+                "status": {
+                    "description": "The service is not working",
+                    "level": "ERROR",
+                    "default": False,
+                    "image": "https://api.zkwolf.com/images/icons/fugue/tick-circle.png",
+                    "url": "https://api.zkwolf.com/api/v1/statuses/up",
+                    "id": "down",
+                    "name": "down"
+                },
+                "url": "https://api.zkwolf.com/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
+                "timestamp": current_time,
+                "sid": "ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
+                "message": "down",
+                "informational": False
+            },
+            "id": "tex",
+            "name": "tex"
+        })
 
 
 @app.route("/api/v1/statuses/up", methods=["GET"])
@@ -212,7 +262,7 @@ def statuses_up():
 @app.route("/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM", methods=["GET"])
 def services_tex_events():
     try:
-        # todo set timestamp to current time
+        current_time = get_date_and_time()
         return jsonify({
             "status": {
                 "description": "The service is up",
@@ -224,7 +274,7 @@ def services_tex_events():
                 "name": "Up"
             },
             "url": "https://api.zkwolf.com/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-            "timestamp": "Wed, 07 Dec 2016 21:00:20 GMT",
+            "timestamp": current_time,
             "sid": "ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
             "message": "up",
             "informational": False
@@ -262,6 +312,8 @@ def consent_eula():
                 return jsonify({"message": "Not Authenticated"}), 401
             is_given = mongo.get_data_with_list(login=userid, login_steam=False,
                                                 items={"eula"})
+            if is_given is None:
+                return jsonify({"isGiven": False})
             if is_given["eula"]:
                 return jsonify({
                     "ConsentId": "eula2",
