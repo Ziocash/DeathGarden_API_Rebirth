@@ -2,10 +2,9 @@ import json
 import os
 from datetime import datetime
 
-from logic.match_manager import match_manager
+from logic.time_handler import get_time
 from logic.queue_handler import matchmaking_queue
 from flask_definitions import *
-import uuid
 
 
 @app.route("/api/v1/config/MATCH_MAKING_REGIONS/raw", methods=["GET"])
@@ -68,11 +67,16 @@ def queue():
     count_a = request.json.get("countA")
     count_b = request.json.get("countB")
     epoch = datetime.now().timestamp()
-
-    logger.graylog_logger(level="info", handler="logging_queue_DUMP", message=request.get_json())
-
-    logger.graylog_logger(level="info", handler="logging_queue",
-                          message=f"User {userid} is queueing for {category} in {region} with {count_a} hunters and {count_b} runners")
+    if additional_user_ids:
+        logger.graylog_logger(level="info",
+                              handler="logging_queue",
+                              message=f"User {userid} is queueing for {category} in "
+                                      f"{region} with {count_a} hunters and {count_b} "
+                                      f"runners and these additional Users {additional_user_ids}")
+    else:
+        logger.graylog_logger(level="info", handler="logging_queue",
+                              message=f"User {userid} is queueing for {category} in {region} with "
+                                      f"{count_a} hunters and {count_b} runners")
     try:
         if not check_only:
             matchmaking_queue.queuePlayer(side=side, userId=userid)
@@ -148,7 +152,27 @@ def match(matchid_unsanitized):
         # logger.graylog_logger(level="debug", handler="match", message=response_data)
         if response_data == "null" or response_data is None:
             logger.graylog_logger(level="error", handler="match", message=f"MatchResponse is null for MatchID: {matchid}")
-            return jsonify({"message": "Match not found"}), 404
+            return {
+                "Category": "Steam-te-18f25613-36778-ue4-374f864b",
+                "creationDateTime": 0,
+                "creator": None,
+                "customData": {
+                },
+                "MatchId": matchid,
+                "props": {
+                    "countA": 0,
+                    "countB": 0,
+                    "gameMode": None,
+                    "MatchConfiguration": None,
+                    "platform": "Windows",
+                },
+                "rank": 1,
+                "Schema": 3,
+                "sideA": [],
+                "sideB": [],
+                "Players": [],
+                "status": "Destroyed"
+            }
             # response_data = matchmaking_queue.getKilledLobbyById(matchid)
             # logger.graylog_logger(level="debug", handler="match", message=response_data)
         return jsonify(response_data)
@@ -242,24 +266,22 @@ def match_register(match_id_unsanitized):
                 elif match_configuration == "/Game/Configuration/MatchConfig/MatchConfig_RUI_All.MatchConfig_RUI_All":
                     match_configuration = "First Strike"
 
-                if dev_env == "true":
-                    match_id = f"DEV-{match_id}"
-
-                webhook_data = {
-                    "content": "",
-                    "embeds": [
-                        {
-                            "title": f"Match Registered by {userid}",
-                            "description": f"MatchID: {match_id} \n GameMode: {game_mode} \n MatchConfiguration: {match_configuration}",
-                            "color": 7932020
-                        }
-                    ],
-                    "attachments": []
-                }
-                try:
-                    discord_webhook(url_list, webhook_data)
-                except Exception as e:
-                    logger.graylog_logger(level="error", handler="discord_webhook_message", message=e)
+                if dev_env == "false":
+                    webhook_data = {
+                        "content": "",
+                        "embeds": [
+                            {
+                                "title": f"Match Registered",
+                                "description": f"MatchID: {match_id} \n GameMode: {game_mode} \n MatchConfiguration: {match_configuration}",
+                                "color": 7932020
+                            }
+                        ],
+                        "attachments": []
+                    }
+                    try:
+                        discord_webhook(url_list, webhook_data)
+                    except Exception as e:
+                        logger.graylog_logger(level="error", handler="discord_webhook_message", message=e)
 
             return jsonify(response)
 
@@ -343,21 +365,70 @@ def match_create():
     userid = session_manager.get_user_id(session_cookie)
 
     category = sanitize_input(request.json.get("category"))
-    rank = sanitize_input(request.json.get("rank"))
+    region = sanitize_input(request.json.get("region"))
     players_a = request.json.get("playersA")
     players_b = request.json.get("playersB")
-    props = request.json.get("props")
+    props = request.json.get("props")["MatchConfiguration"]
 
-    matchid = matchmaking_queue.genMatchUUID()
     # match_send = matchmaking_queue.createQueueResponseMatched(userid, matchid, joinerId=players_a)
     epoch = datetime.now().timestamp()
-    player_list = [players_b, players_a]
+    player_list = []
+    for player in players_a:
+        player_list.append(player)
+    for player in players_b:
+        player_list.append(player)
+    matchid, Match_Config = matchmaking_queue.register_private_match(players_a=players_a, players_b=players_b, match_config=props)
+    # EPrivateMatchState:
+    # Disabled
+    # InGameSession
+    # NotCreated
+    # NotEnoughPlayers
+    # HunterNotSelected
+    # CanStart
 
-    data = {"MatchId": matchid, "Category": category, "Rank": rank,
+    # EMatchmakingState:
+    # None
+    # SearchingForMatch
+    # WaitingForPlayers
+    data = {"MatchId": matchid, "Category": category, "Rank": 1, "Region": region,
             "CreationDateTime": epoch, "ExcludeFriends": False,
-            "ExcludeClanMembers": False, "Status": "WaitingForPlayers", "Creator": userid,
+            "ExcludeClanMembers": False, "Status": "OPEN", "Reason": "FString", "Creator": userid,
             "Players": player_list, "SideA": players_a, "SideB": players_b, "CustomData": {}, "Props": props,
-            "Schema": 11122334455666}
+            "Schema": 1}
+    users = players_a.copy()
+    users.append(players_b)
+    current_time = get_time()[0]
+    countB = len(players_b)
+    data = {
+        "status": "PendingWarparty",
+        "QueueData": {
+            "Position": 1,
+            "ETA": 0,
+            "Stable": False,
+            "SizeA": 1,
+            "SizeB": countB
+        },
+        "matchData": {
+            "category": "Steam-te-18f25613-36778-ue4-374f864b",
+            "creationDateTime": current_time,
+            "creator": players_a,
+            "customData": {},
+            "matchId": matchid,
+            "props": {
+                "countA": 1,
+                "countB": countB,
+                "gameMode": Match_Config["gameMode"],
+                "MatchConfiguration": Match_Config["MatchConfiguration"],
+                "platform": "Windows",
+            },
+            "rank": 1,
+            "schema": 3,
+            "sideA": players_a,
+            "sideB": players_b,
+            "Players": users,
+            "status": "CREATED"
+        }
+    }
     return jsonify(data)
 
 
@@ -516,16 +587,41 @@ def progression_player_end_of_match():
 
 @app.route("/api/v1/extensions/progression/endOfMatch", methods=["POST"])
 def progression_end_of_match():
-    # todo Implent this fully
+    # todo Implement this fully
 
-    # {"data":{"players":[
-    # {"playerId":"619d6f42-db87-4f3e-8dc9-3c9995613614","faction":"Runner","characterGroup":"RunnerGroupE",
-    # "platform":"PC","hasQuit":false,"characterState":"Dead"},
-    # {"playerId":"95041085-e7e4-4759-be3d-e72c69167578","faction":"Hunter","characterGroup":"HunterGroupB",
-    # "platform":"PC","hasQuit":false,"characterState":"InArena"},
-    # {"playerId":"00658d11-2dfd-41e8-b6d2-2462e8f3aa47","faction":"Runner","characterGroup":"RunnerGroupB",
-    # "platform":"PC","hasQuit":false,"characterState":"Dead"}],
-    # "dominantFaction":"Hunter","matchId":"df9655d9-63ac-4dde-a9e9-129aaa249356"}}
+    # {
+    #    "data":{
+    #       "players":[
+    #          {
+    #             "playerId":"619d6f42-db87-4f3e-8dc9-3c9995613614",
+    #             "faction":"Runner",
+    #             "characterGroup":"RunnerGroupE",
+    #             "platform":"PC",
+    #             "hasQuit":false,
+    #             "characterState":"Dead"
+    #          },
+    #          {
+    #             "playerId":"95041085-e7e4-4759-be3d-e72c69167578",
+    #             "faction":"Hunter",
+    #             "characterGroup":"HunterGroupB",
+    #             "platform":"PC",
+    #             "hasQuit":false,
+    #             "characterState":"InArena"
+    #          },
+    #          {
+    #             "playerId":"00658d11-2dfd-41e8-b6d2-2462e8f3aa47",
+    #             "faction":"Runner",
+    #             "characterGroup":"RunnerGroupB",
+    #             "platform":"PC",
+    #             "hasQuit":false,
+    #             "characterState":"Dead"
+    #          }
+    #       ],
+    #       "dominantFaction":"Hunter",
+    #       "matchId":"df9655d9-63ac-4dde-a9e9-129aaa249356"
+    #    }
+    # }
+
     check_for_game_client("strict")
     session_cookie = sanitize_input(request.cookies.get("bhvrSession"))
     userid = session_manager.get_user_id(session_cookie)
@@ -538,11 +634,14 @@ def progression_end_of_match():
                 # What could this struct be????
             }
         logger.graylog_logger(level="info", handler="matchmaking_endOfMatch", message=request.get_json())
+        matchId = request.get_json()["data"]["matchId"]
+        matchmaking_queue.deleteMatch(matchId)
         return jsonify({"Success": True})
     except TimeoutError:
-        return jsonify({"status": "error"})
+        return jsonify({"Success": False})
     except Exception as e:
         logger.graylog_logger(level="error", handler="matchmaking_endOfMatch", message=e)
+        return jsonify({"Success": False})
 
 
 @app.route("/metrics/endofmatch/event", methods=["POST"])
