@@ -21,10 +21,17 @@ def steam_login_function():
             response = requests.get(
                 'https://api.steampowered.com/ISteamUserAuth/AuthenticateUserTicket/v1/?key={}&ticket={}&appid={}'.format(
                     steam_api_key, steam_session_token, appid))
-            steamid = response.json()["response"]["params"]["steamid"]
-            logger.graylog_logger(level="info", handler="steam_login",
-                                  message="User {} logged in with SOFTLAUNCH".format(steamid))
-            return jsonify({"status": "error"})
+            if dev_env == "false":
+                steamid = response.json()["response"]["params"]["steamid"]
+                logger.graylog_logger(level="info", handler="steam_login",
+                                      message="User {} logged in with SOFTLAUNCH".format(steamid))
+                return jsonify({"status": "error"})
+            if response.json() == {"response": {"error": {"errorcode": 102, "errordesc": "Ticket for other app"}}}:
+                if dev_env == "true":
+                    appid = 480
+                    response = requests.get(
+                        'https://api.steampowered.com/ISteamUserAuth/AuthenticateUserTicket/v1/?key={}&ticket={}&appid={}'.format(
+                            steam_api_key, steam_session_token, appid))
 
         steamid = response.json()["response"]["params"]["steamid"]
         userid, token = mongo.user_db_handler(steamid)
@@ -467,15 +474,12 @@ def moderation_check_username():
         username = sanitize_input(request_var["username"])
         # This would be to censor usernames, but we don't need to do that.
         # Also not sure if this is the right response
-        steam_id = mongo.get_data_with_list(login=userid, login_steam=False, items={"steamid"})["steamid"]
-        developers = ["76561198124949660", "76561199169781285"]
-        if steam_id in developers:
-            username = "Dev: " + username
-            return username
-        return jsonify({
-            "Username": username,
-            "UserId": userid
-        })
+        # steam_id = mongo.get_data_with_list(login=userid, login_steam=False, items={"steamid"})["steamid"]
+        # developers = ["76561198124949660", "76561199169781285"]
+        # if steam_id in developers:
+        #     username = "Dev: " + username
+        #     return username
+        return "", 204
     except TimeoutError:
         return jsonify({"status": "error"})
     except Exception as e:
@@ -1480,6 +1484,13 @@ def moderation_check_chat():
         userid = sanitize_input(data["userId"])
         language = sanitize_input(data["language"])
         message = sanitize_input(data["message"])
+        steamid = mongo.get_data_with_list(login=userid, login_steam=False, items={"steamid"})["steamid"]
+        logger.graylog_logger(level="info",
+                              handler="moderation_check_chat",
+                              message=f"User: {userid} | "
+                                      f"SteamID: {steamid} | "
+                                      f"Message: {message} | "
+                                      f"Language: {language}")
         return jsonify({"status": "success", "result": "OK"})
     except TimeoutError:
         return jsonify({"status": "error"})

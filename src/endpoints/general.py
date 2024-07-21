@@ -82,7 +82,7 @@ def content_version_latest(version):
     try:
         print("Responded to content version api call GET")
         print(f"Version called by client: {version_san}")
-        return jsonify({"LatestSupportedVersion": "te-40131b9e-33193-ue4-fbccc218"})
+        return jsonify({"LatestSupportedVersion": "2.11.2-1574441597"})
     except TimeoutError:
         return jsonify({"status": "error"})
     except Exception as e:
@@ -108,7 +108,6 @@ def config_use_mirrors_mm_steam():
 def crashreporter_ping():
     check_for_game_client("soft")
     try:
-        # potentialy {"status":"success","stackKeyId":-1,"crashId":1525,"messageId":-1}
         return "healthy"
     except TimeoutError:
         return jsonify({"status": "error"})
@@ -131,98 +130,73 @@ def tex_get():
 def healthcheck():
     check_for_game_client("soft")
     try:
-        # return jsonify({"status": "success", "online": "true"})
         return jsonify({"Health": "Alive"})
-        # {"Health": "Alive"}
     except TimeoutError:
         return jsonify({"status": "error"})
     except Exception as e:
         logger.graylog_logger(level="error", handler="general-healthcheck", message=e)
 
 
-@app.route("/api/v1/services/tex/")
+@app.route("/api/v1/services/tex")
 def services_tex():
-    current_time = get_date_and_time()
-    try:
-        user_agent = request.headers.get('User-Agent')
-        if "TheExit/++UE4+Release-4.21-CL-0 Windows/" in user_agent:
-            # EStashboard [0 Up, 1 Down, 2 Warning, 3 Failed]
-            # up, down, available
-            return jsonify({
-                "description": "The Exit - Live",
-                "url": "https://api.zkwolf.com/api/v1/services/tex",
-                "list": None,
-                "current-event": {
-                    "status": {
-                        "description": "The service is up",
-                        "level": "NORMAL",
-                        "default": True,
-                        "image": "https://api.zkwolf.com/images/icons/fugue/tick-circle.png",
-                        "url": "https://api.zkwolf.com/api/v1/statuses/up",
-                        "id": "up",
-                        "name": "Up"
-                    },
-                    "url": "https://api.zkwolf.com/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-                    "timestamp": current_time,
-                    "sid": "ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-                    "message": "up",
-                    "informational": False
-                },
-                "id": "tex",
-                "name": "tex"
-            })
-        else:
-            return {"current-event": {"status": {"id": "live"}, "message": ""}}  # Alpha 2 WARNING Msg text?!?!
-
-    except TimeoutError:
-        return jsonify({
+    base_response = {
             "description": "The Exit - Live",
             "url": "https://api.zkwolf.com/api/v1/services/tex",
             "list": None,
             "current-event": {
                 "status": {
-                    "description": "The service is maybe working",
-                    "level": "ERROR",
+                    "description": "",
+                    "level": "",
                     "default": True,
                     "image": "https://api.zkwolf.com/images/icons/fugue/tick-circle.png",
                     "url": "https://api.zkwolf.com/api/v1/statuses/up",
-                    "id": "available",
-                    "name": "available"
+                    "id": "",
+                    "name": ""
                 },
                 "url": "https://api.zkwolf.com/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-                "timestamp": current_time,
+                "timestamp": "",
                 "sid": "ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-                "message": "available",
+                "message": "",
                 "informational": False
             },
             "id": "tex",
             "name": "tex"
-        })
+        }
+    current_time = get_date_and_time()
+    slug_down = {"message": "Down", "id": "down", "description": "The service is currently down", "level": "ERROR"}
+    slug_up = {"message": "Up", "id": "up", "description": "The service is up", "level": "NORMAL"}
+    try:
+
+        # EStashboard [0 Up, 1 Down, 2 Warning, 3 Failed]
+        # up, down, available
+        #
+        # level = "NORMAL", "ERROR", "WARNING", "CRITICAL"
+        # description = "The service is currently down" "The service is up" "The service is experiencing intermittent problems"
+        base_response["current-event"]["status"]["description"] = slug_up["description"]
+        base_response["current-event"]["status"]["level"] = slug_up["level"]
+        base_response["current-event"]["status"]["id"] = slug_up["id"]
+        base_response["current-event"]["status"]["name"] = slug_up["message"]
+        base_response["current-event"]["message"] = slug_up["message"]
+        base_response["current-event"]["timestamp"] = current_time
+
+        return jsonify(base_response)
+    except TimeoutError:
+        base_response["current-event"]["status"]["description"] = slug_down["description"]
+        base_response["current-event"]["status"]["level"] = slug_down["level"]
+        base_response["current-event"]["status"]["id"] = slug_down["id"]
+        base_response["current-event"]["status"]["name"] = slug_down["message"]
+        base_response["current-event"]["message"] = slug_down["message"]
+        base_response["current-event"]["timestamp"] = current_time
+        return jsonify(base_response)
     except Exception as e:
         logger.graylog_logger(level="error", handler="general-services-tex", message=e)
-        return jsonify({
-            "description": "The Exit - Live",
-            "url": "https://api.zkwolf.com/api/v1/services/tex",
-            "list": None,
-            "current-event": {
-                "status": {
-                    "description": "The service is not working",
-                    "level": "ERROR",
-                    "default": False,
-                    "image": "https://api.zkwolf.com/images/icons/fugue/tick-circle.png",
-                    "url": "https://api.zkwolf.com/api/v1/statuses/up",
-                    "id": "down",
-                    "name": "down"
-                },
-                "url": "https://api.zkwolf.com/api/v1/services/tex/events/ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-                "timestamp": current_time,
-                "sid": "ahdzfnB1Ymxpc2hpbmctc3Rhc2hib2FyZHISCxIFRXZlbnQYgICAgMC1mwoM",
-                "message": "down",
-                "informational": False
-            },
-            "id": "tex",
-            "name": "tex"
-        })
+        base_response["current-event"]["status"]["description"] = slug_down["description"]
+        base_response["current-event"]["status"]["level"] = slug_down["level"]
+        base_response["current-event"]["status"]["id"] = slug_down["id"]
+        base_response["current-event"]["status"]["name"] = slug_down["message"]
+        base_response["current-event"]["message"] = slug_down["message"]
+        base_response["current-event"]["timestamp"] = current_time
+        return jsonify(base_response)
 
 
 @app.route("/api/v1/statuses/up", methods=["GET"])
@@ -260,11 +234,9 @@ def services_tex_events():
 
 @app.route("/api/v1/consent/eula2", methods=["PUT", "GET"])
 def consent_eula():
-    # todo Fix this
     check_for_game_client("strict")
     session_cookie = sanitize_input(request.cookies.get("bhvrSession"))
     userid = session_manager.get_user_id(session_cookie)
-
     try:
         if request.method == "PUT":
             try:
@@ -367,6 +339,7 @@ def submit():
 
 @app.route("/api/v1/extensions/quitters/getQuitterState", methods=["POST"])
 def get_quitter_state():
+    # todo: Implement this
     check_for_game_client("strict")
     session_cookie = sanitize_input(request.cookies.get("bhvrSession"))
     userid = session_manager.get_user_id(session_cookie)
@@ -473,30 +446,34 @@ def feedback():
         data = request.get_json()
         report_type = data["type"]
         entity_id = data["entityId"]
-        reporter_steam = mongo.get_data_with_list(login=entity_id, login_steam=False, items={"steamid"})["steamid"]
-        platform_id = data["platformId"]
+        reported_steam = mongo.get_data_with_list(login=entity_id, login_steam=False, items={"steamid"})["steamid"]
+        # platform_id = data["platformId"]
         reason = data["reason"]
         details = data["details"]
         game_specific_data = data["gameSpecificData"]
         match_id = game_specific_data["matchId"]
         playerInfoList = game_specific_data["playerInfoList"]
         player_list = []
+        reporter_steam = "NONE/ERROR"
         for player in playerInfoList:
             steam_id = mongo.get_data_with_list(login=player["playerId"], login_steam=False, items={"steamid"})
             if steam_id:
                 player_list.append(steam_id["steamid"])
+            if player["isReporterPlayer"]:
+                reporter_steam = steam_id["steamid"]
+        players_in_lobby = "\n".join(player_list)
         resp = {
             "content": "",
             "embeds": [
                 {
-                    "title": f"User {reporter_steam} reported.",
-                    "description": f"Reported for {reason} \nReport Type {report_type}\nDetails: {details} \nMatch ID: {match_id} \nReporter: {reporter_steam}\nPlayers in Lobby:\n"
-                                   f"{player_list[0]}\n"
-                                   f"{player_list[1]}\n"
-                                   f"{player_list[2]}\n"
-                                   f"{player_list[3]}\n"
-                                   f"{player_list[4]}\n"
-                                   f"{player_list[5]}\n",
+                    "title": f"User {reported_steam} reported.",
+                    "description": f"Reported for {reason} \n"
+                                   f"Report Type {report_type}\n"
+                                   f"Details: {details} \n"
+                                   f"Match ID: {match_id} \n"
+                                   f"Reporter: {reporter_steam}\n"
+                                   f"Players in Lobby:\n"
+                                   f"{players_in_lobby}\n",
                     "color": 7932020
                 }
             ],
